@@ -41,13 +41,16 @@ export default function App() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadingIndex, setLoadingIndex] = useState(0);
+  const [modelMenuOpen, setModelMenuOpen] = useState(false);
 
   const platform = findPlatform(target.platform);
   const selectedModel = target.model === "custom" ? customModel.trim() : target.model;
+  const selectedModelOption = platform.models.find((model) => model.id === target.model);
   const loadingCopy = loadingMessages[loadingIndex % loadingMessages.length];
 
   function selectPlatform(platformId: string) {
     const next = findPlatform(platformId);
+    setModelMenuOpen(false);
     setTarget({
       ...target,
       platform: next.id,
@@ -131,17 +134,79 @@ export default function App() {
 
             <fieldset>
               <legend>2. 选择模型</legend>
-              <select
-                onChange={(event) => setTarget({ ...target, model: event.target.value })}
-                value={target.model}
+              <div
+                className="model-select"
+                onBlur={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                    setModelMenuOpen(false);
+                  }
+                }}
               >
-                {platform.models.map((model) => (
-                  <option key={model.id} value={model.id}>
-                    {model.label} · {model.tier}
-                  </option>
-                ))}
-                <option value="custom">手动输入模型名</option>
-              </select>
+                <button
+                  aria-expanded={modelMenuOpen}
+                  aria-haspopup="listbox"
+                  className="model-trigger"
+                  onClick={() => setModelMenuOpen((open) => !open)}
+                  type="button"
+                >
+                  <span>
+                    <strong>
+                      {target.model === "custom"
+                        ? customModel || "手动输入模型名"
+                        : selectedModelOption?.label || target.model}
+                    </strong>
+                    <em>
+                      {target.model === "custom"
+                        ? "自定义"
+                        : `${selectedModelOption?.tier || "标准"} · ${platform.name}`}
+                    </em>
+                  </span>
+                  <ChevronIcon />
+                </button>
+                {modelMenuOpen ? (
+                  <div
+                    className="model-menu"
+                    role="listbox"
+                    tabIndex={-1}
+                  >
+                    {platform.models.map((model) => (
+                      <button
+                        aria-selected={target.model === model.id}
+                        className={`model-option ${target.model === model.id ? "active" : ""}`}
+                        key={model.id}
+                        onClick={() => {
+                          setTarget({ ...target, model: model.id });
+                          setModelMenuOpen(false);
+                        }}
+                        role="option"
+                        type="button"
+                      >
+                        <span>
+                          <strong>{model.label}</strong>
+                          <em>{model.id}</em>
+                        </span>
+                        <b>{model.tier}</b>
+                      </button>
+                    ))}
+                    <button
+                      aria-selected={target.model === "custom"}
+                      className={`model-option ${target.model === "custom" ? "active" : ""}`}
+                      onClick={() => {
+                        setTarget({ ...target, model: "custom" });
+                        setModelMenuOpen(false);
+                      }}
+                      role="option"
+                      type="button"
+                    >
+                      <span>
+                        <strong>手动输入模型名</strong>
+                        <em>适合未收录模型或私有别名</em>
+                      </span>
+                      <b>自定义</b>
+                    </button>
+                  </div>
+                ) : null}
+              </div>
               {target.model === "custom" ? (
                 <label>
                   <span>模型名</span>
@@ -491,6 +556,14 @@ function DownloadIcon() {
       <path d="M12 3v12" />
       <path d="M7 10l5 5 5-5" />
       <path d="M5 21h14" />
+    </svg>
+  );
+}
+
+function ChevronIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M7 10l5 5 5-5" />
     </svg>
   );
 }

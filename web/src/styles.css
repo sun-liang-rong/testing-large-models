@@ -109,7 +109,8 @@ p {
 
 .mark svg,
 .run-button svg,
-.icon-button svg {
+.icon-button svg,
+.model-trigger svg {
   width: 22px;
   height: 22px;
   fill: none;
@@ -236,6 +237,145 @@ select {
   cursor: pointer;
 }
 
+.model-select {
+  position: relative;
+}
+
+.model-trigger {
+  width: 100%;
+  min-height: 58px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 12px 10px 14px;
+  color: var(--ink);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(246, 250, 248, 0.95)),
+    var(--field);
+  cursor: pointer;
+  text-align: left;
+}
+
+.model-trigger:hover,
+.model-trigger[aria-expanded="true"] {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(33, 123, 131, 0.14);
+}
+
+.model-trigger > span {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.model-trigger strong {
+  overflow: hidden;
+  color: #1f2c27;
+  font-size: 15px;
+  font-weight: 850;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-trigger em {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-trigger svg {
+  flex: 0 0 auto;
+  color: var(--teal);
+  transition: transform 160ms ease;
+}
+
+.model-trigger[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+
+.model-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  max-height: 320px;
+  overflow: auto;
+  border: 1px solid rgba(189, 205, 198, 0.96);
+  border-radius: 8px;
+  padding: 6px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 22px 48px rgba(25, 39, 34, 0.18);
+  backdrop-filter: blur(14px);
+}
+
+.model-option {
+  width: 100%;
+  min-height: 58px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 10px 10px 12px;
+  color: #22312b;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.model-option:hover,
+.model-option.active {
+  border-color: #cbe0d8;
+  background: #eef8f4;
+}
+
+.model-option > span {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.model-option strong {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-option em {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-option b {
+  min-width: 48px;
+  min-height: 26px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  padding: 0 9px;
+  color: var(--teal);
+  background: #e3f1ed;
+  font-size: 12px;
+  font-weight: 850;
+}
+
 input:focus,
 select:focus {
   border-color: var(--teal);
@@ -245,7 +385,8 @@ select:focus {
 input:hover,
 select:hover,
 .platform-button:hover,
-.icon-button:hover {
+.icon-button:hover,
+.model-trigger:hover {
   transform: translateY(-1px);
 }
 
