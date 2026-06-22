@@ -11,6 +11,7 @@
     "build:api": "tsc -p tsconfig.build.json",
     "build:web": "vite build",
     "start": "node dist/main.js",
+    "test": "tsc -p tsconfig.test.json && node --test dist-test/**/*.spec.js",
     "typecheck": "tsc --noEmit"
   },
   "engines": {

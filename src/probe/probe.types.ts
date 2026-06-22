@@ -71,4 +71,21 @@ export interface ProbeSideReport {
   baseUrl: string;
   results: ProbeResult[];
   summary: SideSummary;
+  metrics: SiteMetrics;
+}
+
+export interface SiteMetrics {
+  onlineRate: number;
+  dilutionRate: number;
+  protocolScore: number;
+  avgLatencyMs: number;
+  tokenUsage: {
+    input: number;
+    output: number;
+    total: number;
+    level: "less" | "average" | "more" | "unknown";
+  };
+  statusLabel: string;
+  statusTone: "ok" | "warn" | "bad";
+  signals: string[];
 }

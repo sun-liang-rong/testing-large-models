@@ -27,6 +27,13 @@ const dimensionLabels: Record<string, string> = {
   reliability: "可靠性"
 };
 
+const tokenLevelLabels = {
+  less: "较少",
+  average: "正常",
+  more: "偏高",
+  unknown: "未知"
+};
+
 export default function App() {
   const [target, setTarget] = useState<EndpointForm>(emptyEndpoint);
   const [customModel, setCustomModel] = useState("");
@@ -177,8 +184,8 @@ export default function App() {
             </fieldset>
 
             <div className="probe-summary">
-              <strong>9 项探针</strong>
-              <span>结构化、指令、推理、上下文、代码、多语言、安全可靠性</span>
+              <strong>13 项探针</strong>
+              <span>身份一致性、签名指纹、协议结构、推理、上下文、Token 消耗与掺水率估算</span>
             </div>
 
             <button className="run-button" disabled={loading || !selectedModel} type="submit">
@@ -233,10 +240,11 @@ function EmptyState() {
       <h2>检测中转站是否“参假”</h2>
       <p>选择平台和模型，填入 BASE URL 与 API Key，系统会运行跨维度探针并给出风险证据。</p>
       <div className="capability-strip">
+        <span>在线率</span>
+        <span>掺水率</span>
+        <span>Token 消耗</span>
         <span>结构化输出</span>
-        <span>复杂指令</span>
-        <span>推理一致性</span>
-        <span>长上下文取针</span>
+        <span>签名指纹</span>
       </div>
     </div>
   );
@@ -301,10 +309,46 @@ function ReportView({
       </header>
 
       <section className="metrics-grid" aria-label="汇总指标">
+        <Metric label="在线率" value={percent(report.target.metrics.onlineRate)} tone="ok" />
+        <Metric label="掺水率" value={percent(report.target.metrics.dilutionRate)} tone={report.target.metrics.statusTone} />
+        <Metric label="Token 消耗" value={tokenLevelLabels[report.target.metrics.tokenUsage.level]} />
+        <Metric label="平均延迟" value={`${report.target.metrics.avgLatencyMs}ms`} />
         <Metric label="综合得分" value={percent(report.target.summary.weightedScore)} />
-        <Metric label="通过率" value={percent(report.target.summary.passRate)} />
         <Metric label="模型预期" value={percent(report.verdict.expectedScore)} />
-        <Metric label="平均延迟" value={`${report.target.summary.avgLatencyMs}ms`} />
+        <Metric label="协议一致性" value={percent(report.target.metrics.protocolScore)} />
+        <Metric label="运行状态" value={report.target.metrics.statusLabel} tone={report.target.metrics.statusTone} />
+      </section>
+
+      <section className="leaderboard-panel">
+        <div className="section-heading">
+          <h3>中转站指标</h3>
+          <span className={`status-pill ${report.target.metrics.statusTone}`}>
+            {report.target.metrics.statusLabel}
+          </span>
+        </div>
+        <div className="site-table">
+          <div className="site-row head">
+            <span>模型</span>
+            <span>Token</span>
+            <span>在线率</span>
+            <span>掺水率</span>
+            <span>延迟</span>
+            <span>状态</span>
+          </div>
+          <div className="site-row">
+            <strong>{report.target.model}</strong>
+            <span>{report.target.metrics.tokenUsage.total || "未知"}</span>
+            <span>{percent(report.target.metrics.onlineRate)}</span>
+            <span>{percent(report.target.metrics.dilutionRate)}</span>
+            <span>{report.target.metrics.avgLatencyMs}ms</span>
+            <span>{report.target.metrics.statusLabel}</span>
+          </div>
+        </div>
+        <div className="signal-list">
+          {report.target.metrics.signals.map((signal) => (
+            <span key={signal}>{signal}</span>
+          ))}
+        </div>
       </section>
 
       <section className="dimension-panel">
@@ -391,9 +435,17 @@ function RiskGauge({ risk, band }: { risk: number; band: "low" | "medium" | "hig
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function Metric({
+  label,
+  value,
+  tone
+}: {
+  label: string;
+  value: string;
+  tone?: "ok" | "warn" | "bad";
+}) {
   return (
-    <article className="metric">
+    <article className={`metric ${tone || ""}`}>
       <span>{label}</span>
       <strong>{value}</strong>
     </article>

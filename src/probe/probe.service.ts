@@ -28,12 +28,16 @@ interface ModelProfile {
   label: string;
 }
 
+type FetchLike = typeof fetch;
+
 @Injectable()
 export class ProbeService {
+  constructor(private readonly fetchClient: FetchLike = fetch) {}
+
   async run(dto: RunProbeDto) {
     this.validateEndpoint(dto.target, "目标端点");
-    const probes = this.probes;
     const profile = this.profileModel(dto.target.model);
+    const probes = this.buildProbes(dto.target.model);
     const target = await this.runTarget(dto.target, probes, DEFAULT_TIMEOUT_MS);
 
     return {
@@ -45,8 +49,38 @@ export class ProbeService {
     };
   }
 
-  private get probes(): ProbeDefinition[] {
+  private buildProbes(claimedModel: string): ProbeDefinition[] {
     return [
+      {
+        id: "identity_contract",
+        title: "模型身份一致性",
+        category: "身份",
+        dimension: "reliability",
+        weight: 0.9,
+        maxTokens: 140,
+        messages: [
+          {
+            role: "system",
+            content:
+              "Return only compact JSON. You are checking whether a relay preserves request metadata."
+          },
+          {
+            role: "user",
+            content: `The requested model name is "${claimedModel}". Return JSON with exactly: claimed_model, normalized_family, passthrough_ok. claimed_model must copy the requested model exactly. normalized_family should be a short lowercase family name such as openai, claude, gemini, deepseek, qwen, kimi, glm, or unknown. passthrough_ok must be true.`
+          }
+        ],
+        evaluate: (text) => {
+          const parsed = this.parseJsonObject(text);
+          if (!parsed.ok) return this.fail(0.1, "身份探针没有返回 JSON");
+          const claimed = String(parsed.value.claimed_model || "");
+          const family = String(parsed.value.normalized_family || "");
+          return this.scoreFromChecks([
+            [claimed === claimedModel, "claimed_model 未精确复制请求模型"],
+            [/^(openai|claude|gemini|deepseek|qwen|kimi|glm|unknown)$/.test(family), "模型家族归一化异常"],
+            [parsed.value.passthrough_ok === true, "passthrough_ok 不是 true"]
+          ]);
+        }
+      },
       {
         id: "json_schema_and_math",
         title: "结构化输出与精确算术",
@@ -109,6 +143,31 @@ export class ProbeService {
         }
       },
       {
+        id: "signature_fingerprint",
+        title: "签名指纹保真",
+        category: "协议",
+        dimension: "format",
+        weight: 1.05,
+        maxTokens: 120,
+        messages: [
+          {
+            role: "system",
+            content: "Return exactly what the user asks for. No Markdown."
+          },
+          {
+            role: "user",
+            content:
+              "Output exactly this single line, preserving punctuation and spacing: SIG|A17|模型=真|hash=9f2c|end"
+          }
+        ],
+        evaluate: (text) => {
+          const line = text.trim();
+          if (line === "SIG|A17|模型=真|hash=9f2c|end") return this.pass("签名字符串保真");
+          if (/SIG|9f2c|模型/.test(line)) return this.fail(0.55, "签名字符串被改写或增加内容");
+          return this.fail(0.05, "签名字符串缺失");
+        }
+      },
+      {
         id: "reasoning_grid",
         title: "多步空间推理",
         category: "推理",
@@ -158,6 +217,30 @@ export class ProbeService {
         }
       },
       {
+        id: "counterfactual_reasoning",
+        title: "反事实规则推理",
+        category: "推理",
+        dimension: "reasoning",
+        weight: 1.1,
+        maxTokens: 120,
+        messages: [
+          {
+            role: "system",
+            content: "Answer with only yes or no."
+          },
+          {
+            role: "user",
+            content:
+              "In this fictional world, every dax is a lim, no lim is a vor, and Mira is a dax. Is Mira a vor?"
+          }
+        ],
+        evaluate: (text) => {
+          const normalized = text.trim().toLowerCase();
+          if (/^no\b/.test(normalized) || /^不是\b/.test(normalized)) return this.pass("反事实规则推理正确");
+          return this.fail(0.1, "反事实规则推理错误");
+        }
+      },
+      {
         id: "needle_recall",
         title: "长上下文取针",
         category: "上下文",
@@ -204,6 +287,37 @@ export class ProbeService {
           const numbers = text.match(/-?\d+/g) || ([] as string[]);
           if (numbers.includes("8")) return this.pass("代码执行推断正确");
           return this.fail(0.15, "代码执行结果不是 8");
+        }
+      },
+      {
+        id: "tool_json_planning",
+        title: "工具调用参数规划",
+        category: "工具",
+        dimension: "instruction",
+        weight: 1,
+        maxTokens: 180,
+        messages: [
+          {
+            role: "system",
+            content: "Return only compact JSON."
+          },
+          {
+            role: "user",
+            content:
+              'Create a JSON object for a fake tool call. Keys: tool, args. tool must be "route_probe". args must contain endpoint="/v1/chat/completions", retries=2, stream=false, and tags=["relay","auth"].'
+          }
+        ],
+        evaluate: (text) => {
+          const parsed = this.parseJsonObject(text);
+          if (!parsed.ok) return this.fail(0.05, "工具参数没有返回 JSON");
+          const args = parsed.value.args as Record<string, unknown> | undefined;
+          return this.scoreFromChecks([
+            [parsed.value.tool === "route_probe", "tool 名称错误"],
+            [args?.endpoint === "/v1/chat/completions", "endpoint 参数错误"],
+            [args?.retries === 2, "retries 参数错误"],
+            [args?.stream === false, "stream 参数错误"],
+            [Array.isArray(args?.tags) && (args?.tags as unknown[]).join(",") === "relay,auth", "tags 参数错误"]
+          ]);
         }
       },
       {
@@ -340,7 +454,8 @@ export class ProbeService {
       platform: config.platform || "custom",
       baseUrl: this.redactUrl(config.baseUrl),
       results,
-      summary: this.summarizeSide(results)
+      summary: this.summarizeSide(results),
+      metrics: this.buildMetrics(results, this.summarizeSide(results), this.profileModel(config.model))
     };
   }
 
@@ -364,7 +479,7 @@ export class ProbeService {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const response = await fetch(endpoint, {
+      const response = await this.fetchClient(endpoint, {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -448,6 +563,12 @@ export class ProbeService {
     for (const [dimension, score] of weakDimensions.slice(0, 3)) {
       evidence.push(`${this.dimensionLabel(dimension)}维度偏弱：${Math.round(score * 100)}%`);
     }
+    if (target.metrics.dilutionRate > 0.35) {
+      evidence.push(`掺水率估算偏高：${Math.round(target.metrics.dilutionRate * 100)}%`);
+    }
+    if (target.metrics.protocolScore < 0.72) {
+      evidence.push(`协议一致性偏弱：${Math.round(target.metrics.protocolScore * 100)}%`);
+    }
 
     const responseModels = Array.from(
       new Set(target.results.map((item) => item.responseModel).filter(Boolean))
@@ -515,17 +636,91 @@ export class ProbeService {
     );
   }
 
+  private buildMetrics(results: ProbeResult[], summary: ReturnType<ProbeService["summarizeSide"]>, profile: ModelProfile) {
+    const successCount = results.filter((item) => item.status && item.status >= 200 && item.status < 300 && item.content).length;
+    const onlineRate = this.round(successCount / Math.max(results.length, 1));
+    const usage = this.sumUsage(results);
+    const usageLevel = this.tokenUsageLevel(usage.total, successCount);
+    const responseModelMismatch = results.some(
+      (item) => item.responseModel && item.responseModel !== results[0]?.responseModel && item.responseModel !== ""
+    );
+    const missingUsageRate = this.round(
+      results.filter((item) => item.status && item.status < 300 && !item.usage).length /
+        Math.max(successCount, 1)
+    );
+    const protocolScore = this.round(
+      this.clamp(onlineRate * 0.55 + (1 - missingUsageRate) * 0.2 + (responseModelMismatch ? 0 : 0.25), 0, 1)
+    );
+    const capabilityGap = Math.max(0, profile.expectedScore - summary.weightedScore);
+    const dilutionRate = this.round(
+      this.clamp((1 - summary.weightedScore) * 0.55 + capabilityGap * 0.35 + (1 - protocolScore) * 0.1, 0, 1)
+    );
+    const statusTone: "ok" | "warn" | "bad" =
+      onlineRate < 0.6 || dilutionRate > 0.65
+        ? "bad"
+        : dilutionRate > 0.35 || protocolScore < 0.72
+        ? "warn"
+        : "ok";
+    const signals: string[] = [];
+    if (onlineRate < 1) signals.push("存在失败请求");
+    if (missingUsageRate > 0.5) signals.push("多数响应缺少 usage 字段");
+    if (responseModelMismatch) signals.push("响应 model 字段不稳定");
+    if (usageLevel === "more") signals.push("Token 消耗高于本轮平均预期");
+    if (!signals.length) signals.push("协议结构与能力表现暂无明显异常");
+    return {
+      onlineRate,
+      dilutionRate,
+      protocolScore,
+      avgLatencyMs: summary.avgLatencyMs,
+      tokenUsage: {
+        ...usage,
+        level: usageLevel
+      },
+      statusLabel: statusTone === "ok" ? "运行正常" : statusTone === "warn" ? "需要复测" : "异常",
+      statusTone,
+      signals
+    };
+  }
+
+  private sumUsage(results: ProbeResult[]) {
+    return results.reduce(
+      (sum, item) => {
+        const usage = item.usage as
+          | { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number; input_tokens?: number; output_tokens?: number }
+          | null
+          | undefined;
+        const input = Number(usage?.prompt_tokens ?? usage?.input_tokens ?? 0);
+        const output = Number(usage?.completion_tokens ?? usage?.output_tokens ?? 0);
+        const total = Number(usage?.total_tokens ?? input + output);
+        return {
+          input: sum.input + input,
+          output: sum.output + output,
+          total: sum.total + total
+        };
+      },
+      { input: 0, output: 0, total: 0 }
+    );
+  }
+
+  private tokenUsageLevel(totalTokens: number, successCount: number) {
+    if (!totalTokens || !successCount) return "unknown" as const;
+    const average = totalTokens / successCount;
+    if (average < 180) return "less" as const;
+    if (average > 420) return "more" as const;
+    return "average" as const;
+  }
+
   private profileModel(model: string): ModelProfile {
     const normalized = model.toLowerCase();
     if (
-      /gpt-5\.5|gpt-5\.4(?!-(mini|nano))|gpt-5$|gpt-4\.1|gpt-4o|o3|o4|claude-4|claude-opus|claude-sonnet-4-6|gemini-3\.5|gemini-3\.1-pro|deepseek-reasoner|qwen3-max|qwen3\.7|qwen3\.5|kimi-k2\.(6|5)/.test(
+      /fable-5|claude-fable-5|gpt-5\.5|gpt-5\.4(?!-(mini|nano))|gpt-5$|gpt-4\.1|gpt-4o|o3|o4|claude-4|claude-opus|claude-sonnet-4-6|gemini-3\.5|gemini-3\.1-pro|deepseek-reasoner|qwen3-max|qwen3\.7|qwen3\.5|kimi-k2\.(6|5)|glm-5\.2/.test(
         normalized
       )
     ) {
       return { tier: "flagship", expectedScore: 0.86, label: "旗舰模型" };
     }
     if (
-      /gpt-5\.4-mini|claude-sonnet-4-5|claude-3\.7|claude-3\.5|gemini-3-flash|gemini-2\.5|deepseek-v4|deepseek-chat|qwen-plus|qwen3-32b|llama-4|grok-3|kimi-k2\b/.test(
+      /gpt-5\.4-mini|claude-sonnet-4-5|claude-3\.7|claude-3\.5|gemini-3-flash|gemini-2\.5|deepseek-v4|deepseek-chat|qwen-plus|qwen3-32b|llama-4|grok-3|kimi-k2\b|glm-5/.test(
         normalized
       )
     ) {

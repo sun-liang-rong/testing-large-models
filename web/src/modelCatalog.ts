@@ -33,11 +33,23 @@ export const platforms: PlatformOption[] = [
     baseUrl: "",
     accent: "#8b5e34",
     models: [
+      { id: "claude-fable-5", label: "Claude Fable 5", tier: "旗舰" },
       { id: "claude-opus-4-8", label: "Claude Opus 4.8", tier: "旗舰" },
       { id: "claude-opus-4-7", label: "Claude Opus 4.7", tier: "旗舰" },
       { id: "claude-opus-4-6", label: "Claude Opus 4.6", tier: "旗舰" },
       { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6", tier: "旗舰" },
       { id: "claude-sonnet-4-5", label: "Claude Sonnet 4.5", tier: "强力" }
+    ]
+  },
+  {
+    id: "zhipu",
+    name: "智谱 GLM",
+    baseUrl: "https://open.bigmodel.cn/api/paas/v4",
+    accent: "#0f766e",
+    models: [
+      { id: "glm-5.2", label: "GLM 5.2", tier: "旗舰" },
+      { id: "glm-5", label: "GLM 5", tier: "强力" },
+      { id: "glm-4.6", label: "GLM 4.6", tier: "标准" }
     ]
   },
   {
