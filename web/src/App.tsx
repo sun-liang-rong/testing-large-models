@@ -1,6 +1,6 @@
 import { FormEvent, useMemo, useState } from "react";
 import { findPlatform, platforms } from "./modelCatalog";
-import { EndpointForm, ProbeReport } from "./types";
+import { EndpointForm, ProbeReport, SiteMetrics } from "./types";
 
 const firstPlatform = platforms[0];
 const emptyEndpoint: EndpointForm = {
@@ -355,6 +355,7 @@ function ReportView({
   report: ProbeReport;
   onDownload: () => void;
 }) {
+  const metrics = normalizeMetrics(report);
   const dimensionEntries = useMemo(() => {
     return Object.entries(report.target.summary.dimensionScores).sort((a, b) => a[0].localeCompare(b[0]));
   }, [report.target.summary.dimensionScores]);
@@ -374,21 +375,21 @@ function ReportView({
       </header>
 
       <section className="metrics-grid" aria-label="汇总指标">
-        <Metric label="在线率" value={percent(report.target.metrics.onlineRate)} tone="ok" />
-        <Metric label="掺水率" value={percent(report.target.metrics.dilutionRate)} tone={report.target.metrics.statusTone} />
-        <Metric label="Token 消耗" value={tokenLevelLabels[report.target.metrics.tokenUsage.level]} />
-        <Metric label="平均延迟" value={`${report.target.metrics.avgLatencyMs}ms`} />
+        <Metric label="在线率" value={percent(metrics.onlineRate)} tone="ok" />
+        <Metric label="掺水率" value={percent(metrics.dilutionRate)} tone={metrics.statusTone} />
+        <Metric label="Token 消耗" value={tokenLevelLabels[metrics.tokenUsage.level]} />
+        <Metric label="平均延迟" value={`${metrics.avgLatencyMs}ms`} />
         <Metric label="综合得分" value={percent(report.target.summary.weightedScore)} />
         <Metric label="模型预期" value={percent(report.verdict.expectedScore)} />
-        <Metric label="协议一致性" value={percent(report.target.metrics.protocolScore)} />
-        <Metric label="运行状态" value={report.target.metrics.statusLabel} tone={report.target.metrics.statusTone} />
+        <Metric label="协议一致性" value={percent(metrics.protocolScore)} />
+        <Metric label="运行状态" value={metrics.statusLabel} tone={metrics.statusTone} />
       </section>
 
       <section className="leaderboard-panel">
         <div className="section-heading">
           <h3>中转站指标</h3>
-          <span className={`status-pill ${report.target.metrics.statusTone}`}>
-            {report.target.metrics.statusLabel}
+          <span className={`status-pill ${metrics.statusTone}`}>
+            {metrics.statusLabel}
           </span>
         </div>
         <div className="site-table">
@@ -402,15 +403,15 @@ function ReportView({
           </div>
           <div className="site-row">
             <strong>{report.target.model}</strong>
-            <span>{report.target.metrics.tokenUsage.total || "未知"}</span>
-            <span>{percent(report.target.metrics.onlineRate)}</span>
-            <span>{percent(report.target.metrics.dilutionRate)}</span>
-            <span>{report.target.metrics.avgLatencyMs}ms</span>
-            <span>{report.target.metrics.statusLabel}</span>
+            <span>{metrics.tokenUsage.total || "未知"}</span>
+            <span>{percent(metrics.onlineRate)}</span>
+            <span>{percent(metrics.dilutionRate)}</span>
+            <span>{metrics.avgLatencyMs}ms</span>
+            <span>{metrics.statusLabel}</span>
           </div>
         </div>
         <div className="signal-list">
-          {report.target.metrics.signals.map((signal) => (
+          {metrics.signals.map((signal) => (
             <span key={signal}>{signal}</span>
           ))}
         </div>
@@ -515,6 +516,30 @@ function Metric({
       <strong>{value}</strong>
     </article>
   );
+}
+
+function normalizeMetrics(report: ProbeReport): SiteMetrics {
+  if (report.target.metrics) return report.target.metrics;
+  const results = report.target.results || [];
+  const successCount = results.filter((item) => item.status && item.status >= 200 && item.status < 300 && item.content).length;
+  const onlineRate = successCount / Math.max(results.length, 1);
+  const statusTone: "ok" | "warn" | "bad" =
+    onlineRate < 0.6 ? "bad" : report.target.summary.weightedScore < 0.72 ? "warn" : "ok";
+  return {
+    onlineRate,
+    dilutionRate: Math.max(0, Math.min(1, 1 - report.target.summary.weightedScore)),
+    protocolScore: onlineRate,
+    avgLatencyMs: report.target.summary.avgLatencyMs,
+    tokenUsage: {
+      input: 0,
+      output: 0,
+      total: 0,
+      level: "unknown" as const
+    },
+    statusLabel: statusTone === "ok" ? "运行正常" : statusTone === "warn" ? "需要复测" : "异常",
+    statusTone,
+    signals: ["当前报告来自旧版接口，已按基础结果降级展示"]
+  };
 }
 
 function percent(value: number) {

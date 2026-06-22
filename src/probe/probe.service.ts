@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from "@nestjs/common";
+import { BadRequestException, Injectable, Optional } from "@nestjs/common";
 import fetch from "node-fetch";
 import { RunProbeDto } from "./dto/run-probe.dto";
 import {
@@ -32,7 +32,7 @@ type FetchLike = typeof fetch;
 
 @Injectable()
 export class ProbeService {
-  constructor(private readonly fetchClient: FetchLike = fetch) {}
+  constructor(@Optional() private readonly fetchClient: FetchLike = fetch) {}
 
   async run(dto: RunProbeDto) {
     this.validateEndpoint(dto.target, "目标端点");

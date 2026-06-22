@@ -36,21 +36,23 @@ export interface ProbeSideReport {
     transportErrors: number;
     dimensionScores: Record<string, number>;
   };
-  metrics: {
-    onlineRate: number;
-    dilutionRate: number;
-    protocolScore: number;
-    avgLatencyMs: number;
-    tokenUsage: {
-      input: number;
-      output: number;
-      total: number;
-      level: "less" | "average" | "more" | "unknown";
-    };
-    statusLabel: string;
-    statusTone: "ok" | "warn" | "bad";
-    signals: string[];
+  metrics?: SiteMetrics;
+}
+
+export interface SiteMetrics {
+  onlineRate: number;
+  dilutionRate: number;
+  protocolScore: number;
+  avgLatencyMs: number;
+  tokenUsage: {
+    input: number;
+    output: number;
+    total: number;
+    level: "less" | "average" | "more" | "unknown";
   };
+  statusLabel: string;
+  statusTone: "ok" | "warn" | "bad";
+  signals: string[];
 }
 
 export interface ProbeReport {
