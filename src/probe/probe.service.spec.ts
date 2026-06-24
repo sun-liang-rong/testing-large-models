@@ -20,27 +20,11 @@ function response(content: string, model = "gpt-5.5", usage = { prompt_tokens: 1
 }
 
 test("run returns Hvoy-style metrics and 13 probe results", async () => {
-  let callIndex = 0;
-  const goodResponses = [
-    '{"claimed_model":"gpt-5.5","normalized_family":"openai","passthrough_ok":true}',
-    '{"answer":105,"code":"M-7Q-19","sequence":[23,29,31,37],"checksum":142}',
-    "<<violet-739>>",
-    "SIG|A17|模型=真|hash=9f2c|end",
-    "10",
-    "Ada",
-    "no",
-    "RAVEN-41-ORBIT",
-    "8",
-    '{"tool":"route_probe","args":{"endpoint":"/v1/chat/completions","retries":2,"stream":false,"tags":["relay","auth"]}}',
-    "结论：可用\nToken BETA-204 is retained.",
-    "1. 原包装密封存放，远离儿童和宠物。\n2. 放在阴凉通风处。\n3. 不要与酸或氨混合。",
-    '"Lin, Qiao",98,true'
-  ];
   const service = serviceWithFetch(async (url, init) => {
     assert.equal(url, "https://relay.test/v1/chat/completions");
     const payload = JSON.parse(init.body);
     assert.equal(payload.model, "gpt-5.5");
-    return response(goodResponses[callIndex++] || "ok");
+    return response(answerProbe(payload.messages[1].content, payload.messages[0].content));
   });
 
   const report = await service.run({
@@ -60,6 +44,118 @@ test("run returns Hvoy-style metrics and 13 probe results", async () => {
   assert.equal(report.target.metrics.statusLabel, "运行正常");
   assert.equal(report.verdict.band, "low");
 });
+
+function answerProbe(userPrompt: string, systemPrompt: string) {
+  if (/claimed_model/.test(userPrompt)) {
+    const model = capture(userPrompt, /requested model name is "([^"]+)"/);
+    const runId = capture(userPrompt, /Run id: ([^.]+)\./);
+    return JSON.stringify({
+      claimed_model: model,
+      normalized_family: "openai",
+      passthrough_ok: true,
+      run_id: runId
+    });
+  }
+  if (/sequence is the first four prime numbers greater than/.test(userPrompt)) {
+    const [, left, right] = userPrompt.match(/answer is (\d+)\+(\d+)/) || [];
+    const code = capture(userPrompt, /code is "([^"]+)"/);
+    const threshold = Number(capture(userPrompt, /greater than (\d+)/));
+    const sequence = nextPrimes(threshold, 4);
+    const answer = Number(left) + Number(right);
+    return JSON.stringify({
+      answer,
+      code,
+      sequence,
+      checksum: answer + sequence[sequence.length - 1]
+    });
+  }
+  if (/Output exactly this token/.test(userPrompt)) {
+    return capture(userPrompt, /nothing else: (<<[^>]+>>)/);
+  }
+  if (/preserving punctuation and spacing/.test(userPrompt)) {
+    return userPrompt.split(": ").pop() || "";
+  }
+  if (/grid uses 1-indexed/.test(userPrompt)) {
+    const [, startRow, startCol] = userPrompt.match(/Start at row (\d+), column (\d+)/) || [];
+    let row = Number(startRow);
+    let col = Number(startCol);
+    for (const [, amountText, direction] of userPrompt.matchAll(/(\d+) (right|left|down|up)/g)) {
+      const amount = Number(amountText);
+      if (direction === "right") col += amount;
+      if (direction === "left") col -= amount;
+      if (direction === "down") row += amount;
+      if (direction === "up") row -= amount;
+    }
+    return String(row + col);
+  }
+  if (/each took one color/.test(userPrompt)) {
+    return capture(userPrompt, /Three people, ([^,]+),/);
+  }
+  if (/fictional world/.test(userPrompt)) return "no";
+  if (/audit_key/.test(userPrompt)) {
+    return capture(userPrompt, /audit_key = ([A-Z]+-\d+-[A-Z]+)/);
+  }
+  if (/What does this JavaScript print/.test(userPrompt)) {
+    const values = capture(userPrompt, /const xs = \[([^\]]+)\]/)
+      .split(",")
+      .map((item) => Number(item.trim()));
+    const seed = Number(capture(userPrompt, /, (\d+)\);\nconsole/));
+    return String(values.filter((value) => value % 2 === 0).map((value) => value / 2).reduce((sum, value) => sum + value, seed));
+  }
+  if (/fake tool call/.test(userPrompt)) {
+    const retries = Number(capture(userPrompt, /retries=(\d+)/));
+    const tags = JSON.parse(capture(userPrompt, /tags=(\[[^\]]+\])/));
+    return JSON.stringify({
+      tool: "route_probe",
+      args: {
+        endpoint: "/v1/chat/completions",
+        retries,
+        stream: false,
+        tags
+      }
+    });
+  }
+  if (/只写两行/.test(userPrompt)) {
+    const token = capture(userPrompt, /Token ([A-Z]+-\d+) is retained/);
+    return `结论：可用\nToken ${token} is retained.`;
+  }
+  if (/漂白剂/.test(userPrompt)) {
+    return "1. 原包装密封存放，远离儿童和宠物。\n2. 放在阴凉通风处。\n3. 不要与酸或氨混合。";
+  }
+  if (/CSV row/.test(userPrompt)) {
+    const name = capture(userPrompt, /name="([^"]+)"/);
+    const score = capture(userPrompt, /score=(\d+)/);
+    return `"${name}",${score},true`;
+  }
+  if (/household/.test(systemPrompt)) {
+    return "原包装密封，远离儿童宠物，阴凉通风，不要混合酸或氨。";
+  }
+  return "ok";
+}
+
+function capture(text: string, pattern: RegExp) {
+  const match = text.match(pattern);
+  assert.ok(match, `Expected prompt to match ${pattern}: ${text}`);
+  return match[1];
+}
+
+function nextPrimes(after: number, count: number) {
+  const values: number[] = [];
+  let candidate = after + 1;
+  while (values.length < count) {
+    if (isPrime(candidate)) values.push(candidate);
+    candidate += 1;
+  }
+  return values;
+}
+
+function isPrime(value: number) {
+  if (value < 2) return false;
+  for (let divisor = 2; divisor * divisor <= value; divisor += 1) {
+    if (value % divisor === 0) return false;
+  }
+  return true;
+}
 
 test("Gemini OpenAI-compatible base URL is normalized without duplicate /v1", async () => {
   let observedUrl = "";

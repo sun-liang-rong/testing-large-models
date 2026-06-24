@@ -2,7 +2,7 @@
   "name": "model-authenticity-lab",
   "version": "0.1.0",
   "private": true,
-  "description": "React + NestJS web console for probing OpenAI-compatible model relay endpoints for suspected model substitution.",
+  "description": "Vue 3 + NestJS web console for probing OpenAI-compatible model relay endpoints for suspected model substitution.",
   "scripts": {
     "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
     "dev:api": "ts-node --transpile-only src/main.ts",
@@ -12,7 +12,7 @@
     "build:web": "vite build",
     "start": "node dist/main.js",
     "test": "tsc -p tsconfig.test.json && node --test dist-test/**/*.spec.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "vue-tsc --noEmit"
   },
   "engines": {
     "node": ">=16"
@@ -26,19 +26,20 @@
     "node-fetch": "^2.7.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "vue": "^3.5.38"
   },
   "devDependencies": {
-    "@types/node-fetch": "^2.6.13",
     "@types/express": "^4.17.21",
     "@types/node": "^20.19.1",
-    "@types/react": "^18.3.23",
-    "@types/react-dom": "^18.3.7",
-    "@vitejs/plugin-react": "^4.2.1",
+    "@types/node-fetch": "^2.6.13",
+    "@vitejs/plugin-vue": "^4.6.2",
+    "autoprefixer": "^10.5.1",
     "concurrently": "^8.2.2",
+    "postcss": "^8.5.15",
+    "tailwindcss": "^3.4.19",
     "ts-node": "^10.9.2",
     "typescript": "^5.4.5",
-    "vite": "^4.5.3"
+    "vite": "^4.5.3",
+    "vue-tsc": "^2.2.12"
   }
 }

@@ -1,6 +1,6 @@
 # 模型真伪检测台
 
-一个 React + NestJS 本地检测网站，用于检测 OpenAI-compatible 中转站是否存在“声称模型”和实际能力不符的风险。
+一个 Vue 3 + NestJS 本地检测网站，用于检测 OpenAI-compatible 中转站是否存在“声称模型”和实际能力不符的风险。
 
 ## 启动
 
@@ -44,7 +44,7 @@ npm start
 - `GET /api/health`：健康检查。
 - `POST /api/probe`：运行检测。请求体包含 `target.platform`、`target.baseUrl`、`target.apiKey` 和 `target.model`。
 
-检测探针定义在 `src/probe/probe.service.ts`，前端入口在 `web/src/App.tsx`。
+检测探针定义在 `src/probe/probe.service.ts`，完整后端探针逻辑见 `docs/probe-logic.md`。前端入口在 `web/src/App.vue`。
 
 ## 验证
 
