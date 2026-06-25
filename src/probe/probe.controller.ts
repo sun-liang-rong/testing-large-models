@@ -10,4 +10,9 @@ export class ProbeController {
   run(@Body() dto: RunProbeDto) {
     return this.probeService.run(dto);
   }
+
+  @Post("ping")
+  ping(@Body() dto: RunProbeDto) {
+    return this.probeService.ping(dto);
+  }
 }

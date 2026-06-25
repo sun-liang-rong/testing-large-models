@@ -3,6 +3,7 @@ import fetch from "node-fetch";
 import { RunProbeDto } from "./dto/run-probe.dto";
 import {
   EndpointConfig,
+  ChatMessage,
   ProbeDefinition,
   ProbeResult,
   ProbeSideReport
@@ -13,6 +14,17 @@ import { buildProbes } from "./probes/probe-definitions";
 
 const DEFAULT_TIMEOUT_MS = 45000;
 const DEFAULT_PROBE_CONCURRENCY = 4;
+const PING_TIMEOUT_MS = 10000;
+
+interface PingProbe {
+  messages: ChatMessage[];
+  maxTokens: number;
+}
+
+const PING_PROBE: PingProbe = {
+  messages: [{ role: "user", content: "ping" }],
+  maxTokens: 1
+};
 
 interface ChatCompletionResult {
   ok: boolean;
@@ -43,6 +55,26 @@ export class ProbeService {
       target,
       modelProfile: profile,
       verdict: buildVerdict(target, profile)
+    };
+  }
+
+  async ping(dto: RunProbeDto) {
+    this.validateEndpoint(dto.target, "目标端点");
+    const result = await this.callChatCompletion(dto.target, PING_PROBE, PING_TIMEOUT_MS);
+    if (!result.ok) {
+      return {
+        ok: false as const,
+        latencyMs: result.latencyMs,
+        status: result.status ?? null,
+        message: result.error || "连通性预检失败"
+      };
+    }
+    return {
+      ok: true as const,
+      latencyMs: result.latencyMs,
+      status: result.status ?? null,
+      message: "连通正常，密钥有效",
+      responseModel: result.responseModel ?? null
     };
   }
 
@@ -105,7 +137,7 @@ export class ProbeService {
 
   private async callChatCompletion(
     config: EndpointConfig,
-    probe: ProbeDefinition,
+    probe: { messages: ChatMessage[]; maxTokens: number },
     timeoutMs: number
   ): Promise<ChatCompletionResult> {
     const startedAt = Date.now();
